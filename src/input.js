@@ -160,7 +160,11 @@
       if (this.gp.connected && (Math.abs(this.gp.aimx) + Math.abs(this.gp.aimy)) > 0.3) {
         return Math.atan2(this.gp.aimy, this.gp.aimx);
       }
-      if (this.mouse.inside && this.mouse.moved < 3) return E.angTo(px, py, this.mouse.x, this.mouse.y);
+      // El ratón vive en coordenadas de pantalla: hay que pasar el punto de
+      // referencia (héroe) a pantalla antes de comparar, o toda la franja
+      // entre su posición de mundo y su posición en pantalla apunta al lado
+      // contrario cuando la cámara tiene offset.
+      if (this.mouse.inside && this.mouse.moved < 3) return E.angTo(Gfx.screenX(px), Gfx.screenY(py), this.mouse.x, this.mouse.y);
       return fallback;
     },
 

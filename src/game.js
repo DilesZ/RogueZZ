@@ -66,6 +66,7 @@
     projectiles: [],
     zones: [],
     pickups: [],
+    chests: [],
     doors: [],
     vfx: [],
     toasts: [],
@@ -151,6 +152,10 @@
       h.dashShield = 0; h.thorns = 0; h.heavyMul = 1; h.killHeal = 0; h.knockMul = 1;
       h.spellMult = 1; h.regen = 0; h.berserk = false; h.reviveCharge = 0; h.dashDamage = 0;
       h.ingBonus = 0;
+      h.gear = { weapon: null, armor: null };
+      h.bag = [];
+      h._gearHp = 0;
+      h.recomputeGear();
       h.dead = false;
       h.state = 'idle';
       h.ghosts.length = 0;
@@ -192,6 +197,7 @@
       this.projectiles.length = 0;
       this.zones.length = 0;
       this.pickups.length = 0;
+      this.chests.length = 0;
       this.vfx.length = 0;
       this.doors.length = 0;
       this.toasts.length = 0;
@@ -226,6 +232,25 @@
       this.bossDelay = 0;
 
       const r = this.room;
+
+      // cofres aleatorios: botín extra repartido por la sala
+      this.chests.length = 0;
+      if (plan.kind !== 'boss') {
+        const bd = r.bounds;
+        let nChests = 0;
+        if (plan.kind === 'elite') nChests = 1 + (Math.random() < 0.35 ? 1 : 0);
+        else nChests = (Math.random() < 0.72 ? 1 : 0) + (Math.random() < 0.18 ? 1 : 0);
+        for (let i = 0; i < nChests; i++) {
+          let cx = 0, cy = 0, ok = false;
+          for (let k = 0; k < 40 && !ok; k++) {
+            cx = bd.x + 24 + Math.random() * (bd.w - 48);
+            cy = bd.y + 24 + Math.random() * (bd.h - 48);
+            ok = r.canStand(cx, cy) && E.dist(cx, cy, r.w / 2, r.h - 54) > 80;
+            if (ok) for (const c of this.chests) if (E.dist(cx, cy, c.x, c.y) < 70) ok = false;
+          }
+          if (ok) this.chests.push({ x: cx, y: cy, opened: false, t: 0, near: false, glow: Math.random() * TAU });
+        }
+      }
       this.hero.x = r.w / 2;
       this.hero.y = r.h - 54;
       this.hero.vx = 0; this.hero.vy = 0;
@@ -410,6 +435,12 @@
         }
       }
       if (E.chance(0.13)) this.spawnPickup(e.x, e.y, 'heal', 12);
+      // equipo: armas y armaduras que caen de los enemigos (seguro en élites)
+      const gearChance = e.boss ? 1 : e.elite ? 0.4 : 0.07 + this.depth * 0.004;
+      if (E.chance(gearChance)) {
+        const it = Items.roll(this.roomIndex);
+        this.spawnPickup(e.x + E.rnd(6, -6), e.y + E.rnd(4, -4), it.kind, 1, it);
+      }
       Gfx.shake(e.elite ? 4 : 1.6);
     },
 
@@ -428,6 +459,11 @@
       for (let i = 0; i < 14; i++) this.spawnPickup(b.x + E.rnd(24, -24), b.y + E.rnd(14, -14), 'essence', 5);
       for (let i = 0; i < 3; i++) this.spawnPickup(b.x + E.rnd(20, -20), b.y, 'ing', 3, E.pick(Object.keys(Alchemy.ING)));
       this.spawnPickup(b.x, b.y, 'heal', 40);
+      // el jefe siempre suelta equipo
+      for (let i = 0; i < 2; i++) {
+        const it = Items.roll(Math.min(11, this.roomIndex + 1));
+        this.spawnPickup(b.x + E.rnd(20, -20), b.y + 10, it.kind, 1, it);
+      }
       this.hero.gainXp(Math.round(110 * this.xpMul), this);
       this.toast('¡' + b.name + ' ha caído!', '#f0c05a');
       this.essenceEarned += 40;
@@ -437,9 +473,10 @@
     },
 
     spawnPickup(x, y, type, amount, ing) {
+      const gear = type === 'weapon' || type === 'armor';
       this.pickups.push({
         x, y, vx: E.rnd(80, -80), vy: E.rnd(-40, -120), type, amount: amount || 1, ing,
-        life: 26, bob: E.rnd(TAU, 0), magnet: 0, z: 6,
+        life: gear ? 99 : 26, bob: E.rnd(TAU, 0), magnet: 0, z: 6, fullT: -9,
       });
     },
 
@@ -612,10 +649,12 @@
         Gfx.Fx.update(dt * 0.3);
         return;
       }
+      if (this.state === 'inventory') { this.updateInventory(); return; }
 
       if (this.state !== 'run') return;
       if (Input.pressed('pause')) { this.state = 'pause'; this.pauseSel = 0; return; }
       if (Input.pressed('radial')) { this.state = 'radial'; this.radialLock = 0.2; this.timeScale = 0.14; return; }
+      if (Input.pressed('inventory')) { this.state = 'inventory'; this.invSel = 0; Snd.sfx('ui'); return; }
 
       // cambio de ranura de hechizo
       for (let i = 0; i < 4; i++) {
@@ -661,7 +700,7 @@
       // regeneración / berserk
       if (h.regen) h.hp = Math.min(h.maxHp, h.hp + h.regen * sdt);
       h.berserkActive = h.berserk && h.hp < h.maxHp * 0.35;
-      h.effDmgMul = h.damageMult * (h.berserkActive ? 1.35 : 1);
+      h.effDmgMul = h.damageMult * (h.gearDmgMul || 1) * (h.berserkActive ? 1.35 : 1);
 
       // cola de aparición
       for (let i = this.spawnQueue.length - 1; i >= 0; i--) {
@@ -694,6 +733,20 @@
       for (const e of this.enemies) e.update(sdt, this);
       this.enemies = this.enemies.filter((e) => !e.remove);
 
+      // los enemigos jamás salen de la sala: el empuje de los golpes y los
+      // enemigos voladores tampoco pueden atravesar los límites (antes unos
+      // wisps empujados quedaban fuera, inalcanzables e imposibles de matar)
+      const eb = this.room.bounds;
+      for (const e of this.enemies) {
+        if (!e.alive || e.state === 'dead' || e.state === 'spawn') continue;
+        const pad = (e.r || 6) * 0.8;
+        const nx = E.clamp(e.x, eb.x + pad, eb.x + eb.w - pad);
+        const ny = E.clamp(e.y, eb.y + pad, eb.y + eb.h - pad);
+        if (nx !== e.x) e.vx *= -0.25;
+        if (ny !== e.y) e.vy *= -0.25;
+        e.x = nx; e.y = ny;
+      }
+
       // colisiones de golpes
       this.resolveHits(sdt);
 
@@ -714,6 +767,7 @@
       // puertas
       if (this.room.doorHint) this.room.doorHint -= sdt;
       this.updateDoors(sdt);
+      this.updateChests(sdt);
 
       // limpieza de sala
       const cleared = this.enemies.length === 0 && this.spawnQueue.length === 0;
@@ -1038,6 +1092,7 @@
           p.y = E.smooth(p.y, h.y, 8, dt);
         }
         if (d < 12) {
+          let picked = true;
           if (p.type === 'essence') {
             this.essence += p.amount;
             this.essenceEarned += p.amount;
@@ -1049,8 +1104,27 @@
             h.hp = Math.min(h.maxHp, h.hp + p.amount);
             Snd.sfx('heal');
             Gfx.F.add(h.x, h.y - 28, '+' + p.amount, { color: '#6ff08a', size: 1 });
+          } else if (p.type === 'weapon' || p.type === 'armor') {
+            // equipo: a la bolsa; se autoequipa si la ranura está vacía
+            const it = p.ing;
+            if (h.bag.length >= 10) {
+              picked = false;
+              if (this.time - p.fullT > 1.6) {
+                this.toast('Inventario lleno', '#f0c05a');
+                p.fullT = this.time;
+              }
+            } else {
+              Snd.sfx('relic');
+              let auto = '';
+              if (it.kind === 'weapon' && !h.gear.weapon) { h.gear.weapon = it; auto = ' (equipada)'; }
+              else if (it.kind === 'armor' && !h.gear.armor) { h.gear.armor = it; auto = ' (equipada)'; }
+              else h.bag.push(it);
+              h.recomputeGear();
+              this.toast(it.name + ' — ' + Items.statText(it) + auto, it.color);
+              Gfx.F.add(h.x, h.y - 36, it.name, { color: it.color, size: 1.3 });
+            }
           }
-          this.pickups.splice(i, 1);
+          if (picked) this.pickups.splice(i, 1);
         }
       }
     },
@@ -1098,6 +1172,113 @@
           return;
         }
       }
+    },
+
+    // ---------------- cofres ----------------
+    updateChests(dt) {
+      for (const c of this.chests) {
+        if (c.opened) { c.t += dt; c.near = false; continue; }
+        c.near = E.dist(this.hero.x, this.hero.y, c.x, c.y) < 18;
+        if (c.near && Input.pressed('interact')) this.openChest(c);
+      }
+    },
+
+    openChest(c) {
+      c.opened = true;
+      c.t = 0;
+      Gfx.P.burst(c.x, c.y - 8, 20, { color: ['#f0c05a', '#fff3d0', '#c8a0ff'], speed: 120, life: 0.7, size: 2, glow: true, grav: -60 });
+      Gfx.shake(2);
+      Snd.sfx('relic');
+      const roll = Math.random();
+      if (roll < 0.55) {
+        // mejora directa: una bendición aleatoria (puede repetir las acumulables)
+        const b = E.pick(BOONS);
+        b.apply(this.hero, this);
+        this.boons.push(b);
+        this.toast('Cofre: ' + b.name + ' — ' + b.desc, '#f0c05a');
+        Gfx.F.add(c.x, c.y - 24, b.name, { color: '#f0c05a', size: 1.6 });
+      } else if (roll < 0.85) {
+        const it = Items.roll(this.roomIndex);
+        this.spawnPickup(c.x, c.y - 6, it.kind, 1, it);
+        this.toast('Cofre: ¡' + it.name + '!', it.color);
+      } else {
+        const ess = 12 + Math.floor(Math.random() * 16);
+        for (let i = 0; i < 4; i++) this.spawnPickup(c.x + E.rnd(10, -10), c.y + E.rnd(8, -8), 'essence', Math.ceil(ess / 4));
+        this.spawnPickup(c.x, c.y, 'heal', 18);
+        this.toast('Cofre: esencia y savia', '#b98bff');
+      }
+    },
+
+    // ---------------- inventario ----------------
+    invRows() {
+      const rows = [{ kind: 'slot', slot: 'weapon' }, { kind: 'slot', slot: 'armor' }];
+      for (let i = 0; i < this.hero.bag.length; i++) rows.push({ kind: 'bag', idx: i });
+      return rows;
+    },
+
+    updateInventory() {
+      const h = this.hero;
+      const rows = this.invRows();
+      const n = Math.max(1, rows.length);
+      if (this.invSel >= n) this.invSel = n - 1;
+      if (Input.pressed('down')) { this.invSel = (this.invSel + 1) % n; Snd.sfx('uiMove'); }
+      if (Input.pressed('up')) { this.invSel = (this.invSel - 1 + n) % n; Snd.sfx('uiMove'); }
+      if (Input.pressed('inventory') || Input.pressed('pause')) { this.state = 'run'; Snd.sfx('ui'); return; }
+      const row = rows[this.invSel];
+      if (Input.pressed('confirm')) {
+        if (row.kind === 'bag') this.equipBagItem(row.idx);
+        else if (h.gear[row.slot]) this.unequipSlot(row.slot);
+      }
+      if (Input.pressed('discard')) {
+        if (row.kind === 'bag') {
+          const it = h.bag.splice(row.idx, 1)[0];
+          if (it) { this.toast(it.name + ' descartado', '#8a7fa0'); Snd.sfx('error'); }
+        } else if (h.gear[row.slot]) {
+          const it = h.gear[row.slot];
+          h.gear[row.slot] = null;
+          h.recomputeGear();
+          this.toast(it.name + ' descartado', '#8a7fa0');
+          Snd.sfx('error');
+        }
+      }
+      // ratón: pasar por encima selecciona, clic equipa o quita
+      const L = UI.INV;
+      for (let i = 0; i < rows.length; i++) {
+        const ry = L.py + L.row0 + i * L.rh;
+        if (Input.mouse.x > L.px + 6 && Input.mouse.x < L.px + L.pw - 6 && Input.mouse.y > ry - 9 && Input.mouse.y < ry + 4) {
+          this.invSel = i;
+          if (Input.mouse.pressed) {
+            const rw = rows[i];
+            if (rw.kind === 'bag') this.equipBagItem(rw.idx);
+            else if (h.gear[rw.slot]) this.unequipSlot(rw.slot);
+          }
+          break;
+        }
+      }
+    },
+
+    equipBagItem(idx) {
+      const h = this.hero;
+      const it = h.bag[idx];
+      if (!it) return;
+      const prev = h.gear[it.kind];
+      h.bag.splice(idx, 1);
+      h.gear[it.kind] = it;
+      if (prev) h.bag.push(prev);
+      h.recomputeGear();
+      this.toast(it.name + ' equipada — ' + Items.statText(it), it.color);
+      Snd.sfx('pick');
+    },
+
+    unequipSlot(slot) {
+      const h = this.hero;
+      const it = h.gear[slot];
+      if (!it) return;
+      if (h.bag.length >= 10) { this.toast('Inventario lleno', '#f0c05a'); Snd.sfx('error'); return; }
+      h.gear[slot] = null;
+      h.bag.push(it);
+      h.recomputeGear();
+      Snd.sfx('ui');
     },
 
     // ---------------- dibujado ----------------

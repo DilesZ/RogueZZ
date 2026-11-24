@@ -60,6 +60,33 @@
       this.castGlow = 0;
       this.stepT = 0;
       this.lastGroundY = y;
+
+      // equipo: arma y armadura equipadas + bolsa de piezas recogidas
+      this.gear = { weapon: null, armor: null };
+      this.bag = [];
+      this._gearHp = 0;
+      this.gearDmgMul = 1;
+      this.gearCrit = 0;
+      this.gearDef = 0;
+      this.gearSpeed = 0;
+    }
+
+    // Recalcula los bonus del equipo equipado. La vida del equipo se aplica
+    // como diferencia sobre maxHp para no pisar bendiciones ni meta-mejoras.
+    recomputeGear() {
+      const w = this.gear ? this.gear.weapon : null;
+      const a = this.gear ? this.gear.armor : null;
+      this.gearDmgMul = 1 + (w ? (w.dmg || 0) : 0);
+      this.gearCrit = w ? (w.crit || 0) : 0;
+      this.gearDef = a ? (a.def || 0) : 0;
+      this.gearSpeed = a ? (a.speed || 0) : 0;
+      const hp = a ? (a.hp || 0) : 0;
+      if (hp !== (this._gearHp || 0)) {
+        const d = hp - (this._gearHp || 0);
+        this.maxHp += d;
+        this.hp = Math.max(1, Math.min(this.maxHp, this.hp + d));
+        this._gearHp = hp;
+      }
     }
 
     get cx() { return this.x; }
@@ -158,6 +185,8 @@
       if (this.state === 'dead') return 0;
       if (this.iframe > 0) return 0;
       o = o || {};
+      // la armadura equipada reduce el daño antes del escudo
+      dmg *= 1 - E.clamp01(this.gearDef || 0);
       if (this.shield > 0) {
         const absorbed = Math.min(this.shield, dmg);
         this.shield -= absorbed;
@@ -388,7 +417,7 @@
       const rad = index === 9 ? 34 : index === 2 ? 30 : 26;
       const base = (index === 9 ? 26 : index === 2 ? 16 : 11) * (this.effDmgMul || this.damageMult);
       const dmg = base * (index === 9 ? (this.heavyMul || 1) : 1);
-      const crit = Math.random() < this.critChance;
+      const crit = Math.random() < (this.critChance + (this.gearCrit || 0));
       g.addHit({
         x: this.x + Math.cos(a) * dist,
         y: this.y - 14 + Math.sin(a) * dist,

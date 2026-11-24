@@ -681,7 +681,7 @@
     drawPickup(ctx, p, time) {
       const bob = Math.sin(time * 3.8 + p.bob) * 1.4, yy = p.y - p.z + bob;
       Gfx.shadow(p.x, p.y, 4, .22);
-      const color = p.type === 'essence' ? '#dab3ff' : p.type === 'heal' ? '#e88f76' : ((Alchemy.ING[p.ing] || Alchemy.ING.savia).color || '#93cf89');
+      const color = p.type === 'essence' ? '#dab3ff' : p.type === 'heal' ? '#e88f76' : (p.ing && p.ing.color) ? p.ing.color : ((Alchemy.ING[p.ing] || Alchemy.ING.savia).color || '#93cf89');
       Gfx.glow(p.x, yy, 13, color, .23 + Math.sin(time * 4 + p.bob) * .04);
       Gfx.ring(p.x, yy + 1, 5 + Math.sin(time * 3 + p.bob) * .7, color, .3, .7);
       if (p.type === 'essence') {
@@ -692,6 +692,25 @@
       } else if (p.type === 'heal') {
         path(ctx, [[p.x, yy - 5], [p.x + 4, yy - 1], [p.x + 3, yy + 4], [p.x, yy + 6], [p.x - 4, yy + 3], [p.x - 4, yy - 1]], linear(ctx, p.x - 4, yy - 5, p.x + 4, yy + 5, ['#fff1c9', '#ef886f', '#743f56']), '#ffd6a3', .7);
         ctx.strokeStyle = '#fff1c7'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(p.x, yy - 2); ctx.lineTo(p.x, yy + 3); ctx.moveTo(p.x - 2, yy); ctx.lineTo(p.x + 2, yy); ctx.stroke();
+      } else if (p.type === 'weapon' || p.type === 'armor') {
+        // equipo: espada o coraza con haz de luz según rareza
+        const it = p.ing || {};
+        const col = it.color || '#a8b8c4';
+        const grd = ctx.createLinearGradient(p.x, yy - 18, p.x, yy);
+        grd.addColorStop(0, E.alpha(col, 0));
+        grd.addColorStop(1, E.alpha(col, .4));
+        ctx.fillStyle = grd;
+        ctx.fillRect(p.x - 3, yy - 18, 6, 18);
+        if (p.type === 'weapon') {
+          path(ctx, [[p.x, yy - 10], [p.x + 2.2, yy - 5], [p.x + 1.6, yy + 1], [p.x - 1.6, yy + 1], [p.x - 2.2, yy - 5]], linear(ctx, p.x - 2, yy - 10, p.x + 2, yy + 1, ['#f4f0e4', col, E.shade(col, -.45)]), '#2a2530', .7);
+          Gfx.rect(p.x - 4.4, yy + 1, 8.8, 1.6, E.shade(col, -.2));
+          Gfx.rect(p.x - .8, yy + 2.6, 1.6, 4.4, '#6b4a2f');
+          Gfx.circ(p.x, yy + 7.6, 1.1, '#e8c477');
+        } else {
+          path(ctx, [[p.x - 4, yy - 6], [p.x + 4, yy - 6], [p.x + 3.4, yy + 2], [p.x, yy + 6], [p.x - 3.4, yy + 2]], linear(ctx, p.x - 4, yy - 6, p.x + 4, yy + 4, [E.shade(col, .3), col, E.shade(col, -.5)]), '#2a2530', .7);
+          Gfx.line(p.x - 2.6, yy - 6, p.x - 2.6, yy + 1.6, E.alpha('#0d0a12', .5), .7);
+          Gfx.line(p.x + 2.6, yy - 6, p.x + 2.6, yy + 1.6, E.alpha('#0d0a12', .5), .7);
+        }
       } else {
         const item = Alchemy.ING[p.ing] || Alchemy.ING.savia;
         ellipse(ctx, p.x, yy, 5.2, 5.2, '#11151a', color, .75);
@@ -699,6 +718,37 @@
         path(ctx, [[-3, 1], [-2, -2], [0, -4], [1, -1], [4, -2], [2, 1], [3, 3], [0, 2], [-2, 4]], linear(ctx, -3, -3, 3, 3, ['#fff2cd', color, E.shade(color, -.48)]), '#e8ddb8', .6);
         ctx.strokeStyle = '#f3e5b9'; ctx.lineWidth = .55; ctx.beginPath(); ctx.moveTo(-2, 2); ctx.quadraticCurveTo(0, 0, 2, -2); ctx.stroke();
         ctx.restore();
+      }
+    },
+
+    drawChest(ctx, c, time) {
+      const t = time + (c.glow || 0);
+      const bob = c.opened ? 0 : Math.sin(t * 2.2) * .6;
+      const x = c.x, y = c.y + bob;
+      Gfx.shadow(x, c.y + 5, 9, .3);
+      if (!c.opened) {
+        Gfx.glow(x, y - 5, 18, '#f0c05a', .14 + Math.sin(t * 3) * .05);
+        const grd = ctx.createLinearGradient(x, y - 24, x, y);
+        grd.addColorStop(0, E.alpha('#f0c05a', 0));
+        grd.addColorStop(1, E.alpha('#f0c05a', .22));
+        ctx.fillStyle = grd;
+        ctx.fillRect(x - 5, y - 24, 10, 24);
+      }
+      // cuerpo
+      path(ctx, [[x - 8, y + 4], [x - 8, y - 2], [x - 6, y - 6], [x + 6, y - 6], [x + 8, y - 2], [x + 8, y + 4]], linear(ctx, x - 8, y - 6, x + 8, y + 4, ['#a8814a', '#7a5a30', '#4a3620']), '#241a10', .8);
+      Gfx.rect(x - 8, y + 1, 16, 1.2, E.alpha('#e8c477', .5));
+      // tapa
+      if (!c.opened) {
+        path(ctx, [[x - 8, y - 2], [x - 6, y - 9], [x + 6, y - 9], [x + 8, y - 2]], linear(ctx, x - 8, y - 9, x + 8, y - 2, ['#c9a25e', '#8a6a3a']), '#241a10', .8);
+        Gfx.rect(x - 1.2, y - 5, 2.4, 3.6, '#e8c477');
+        Gfx.circ(x, y - 3.6, .7, '#6b4a1f');
+      } else {
+        path(ctx, [[x - 8, y - 2], [x - 6, y - 12], [x + 6, y - 12], [x + 8, y - 2]], linear(ctx, x - 8, y - 12, x + 8, y - 2, ['#8a6a3a', '#5a4225']), '#241a10', .8);
+        Gfx.glow(x, y - 3, 10, '#f0c05a', .3);
+      }
+      if (c.near && !c.opened) {
+        Gfx.ring(x, y - 2, 13 + Math.sin(time * 6) * 2, '#f0c05a', .35, 1);
+        Gfx.text('E - abrir', x, y - 22, { size: 1, align: 'center', color: '#fff3d0', outline: '#0b0910' });
       }
     },
 

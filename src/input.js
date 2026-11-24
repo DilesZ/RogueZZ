@@ -13,6 +13,8 @@
     cast: ['KeyQ'],
     radial: ['Tab'],
     interact: ['KeyE'],
+    inventory: ['KeyI'],
+    discard: ['KeyX'],
     pause: ['Escape'],
     confirm: ['Enter'],
     slot1: ['Digit1'], slot2: ['Digit2'], slot3: ['Digit3'], slot4: ['Digit4'],

@@ -89,8 +89,9 @@
       const ax = Input.axis();
       const has = !!(ax.x || ax.y);
       const rate = has ? 17 : 30;
-      h.vx = E.smooth(h.vx, ax.x * h.speed, rate, dt);
-      h.vy = E.smooth(h.vy, ax.y * h.speed, rate, dt);
+      const gearSp = 1 + (h.gearSpeed || 0);
+      h.vx = E.smooth(h.vx, ax.x * h.speed * gearSp, rate, dt);
+      h.vy = E.smooth(h.vy, ax.y * h.speed * gearSp, rate, dt);
       let sp = Math.hypot(h.vx, h.vy);
       if (!has && sp < 9) { h.vx = 0; h.vy = 0; sp = 0; }
 

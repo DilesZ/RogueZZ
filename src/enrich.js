@@ -859,6 +859,7 @@
     // (los enemigos muertos permanecen un instante para su disolución)
     const drawables = [];
     for (const o of r.obstacles) drawables.push({ y: o.y, kind: 'obs', o });
+    for (const c of g.chests) drawables.push({ y: c.y + 4, kind: 'chest', o: c });
     for (const e of g.enemies) drawables.push({ y: e.y, kind: 'e', o: e });
     if (g.dog) drawables.push({ y: g.dog.y, kind: 'dog', o: g.dog });
     drawables.push({ y: g.hero.y, kind: 'hero', o: g.hero });
@@ -867,6 +868,10 @@
     // luz local sobre suelo y contornos
     for (const d of drawables) {
       if (d.kind === 'obs') continue;
+      if (d.kind === 'chest') {
+        if (!d.o.opened) Gfx.glow(d.o.x, d.o.y - 6, 18, '#f0c05a', .12);
+        continue;
+      }
       const actor = d.o;
       if (d.kind === 'hero') {
         const hue = actor.castGlow > .2 ? '#b98bff' : r.biome.accent;
@@ -885,6 +890,7 @@
 
     for (const d of drawables) {
       if (d.kind === 'obs') Art.drawObstacle(ctx, r, d.o, g.time);
+      else if (d.kind === 'chest') Art.drawChest(ctx, d.o, g.time);
       else if (d.kind === 'e') d.o.draw(ctx, g);
       else if (d.kind === 'dog') Art.drawDog(ctx, d.o, g.time);
       else if (d.kind === 'hero') d.o.draw(ctx, g);
@@ -975,6 +981,7 @@
     if (g.state === 'reward') UI.drawRewards(ctx, g);
     if (g.state === 'pause') UI.drawPause(ctx, g);
     if (g.state === 'radial') UI.radialHover = UI.drawRadial(ctx, g);
+    if (g.state === 'inventory') UI.drawInventory(ctx, g);
     if (g.state === 'death') UI.drawDeath(ctx, g);
     if (g.state === 'victory') UI.drawVictory(ctx, g);
 

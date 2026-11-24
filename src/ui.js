@@ -89,6 +89,21 @@
       }
 
       // ---- esquiva ----
+      // ---- equipo equipado ----
+      const gw = h.gear;
+      if (gw && (gw.weapon || gw.armor)) {
+        let gy = 57;
+        const gearLine = (it) => {
+          if (!it) return;
+          Gfx.rect(14, gy - 5, 4, 4, it.color);
+          Gfx.text(it.name + ' ' + Items.statText(it), 21, gy, { size: 1, color: '#cfc8dd', shadow: '#000' });
+          gy += 10;
+        };
+        gearLine(gw.weapon);
+        gearLine(gw.armor);
+      }
+
+      // ---- esquiva ----
       const dx = 12, dy = 236;
       for (let i = 0; i < h.dashMax; i++) {
         const full = i < h.dashCharges;
@@ -187,6 +202,39 @@
         ctx.globalAlpha = 1;
         ty += 13;
       }
+    },
+
+    INV: { px: 96, py: 26, pw: 288, ph: 218, row0: 38, rh: 12 },
+
+    drawInventory(ctx, g) {
+      const h = g.hero;
+      const L = UI.INV;
+      ctx.fillStyle = 'rgba(4,3,8,0.78)';
+      ctx.fillRect(0, 0, Gfx.W, Gfx.H);
+      Gfx.glow(Gfx.W / 2, L.py + 14, 90, '#7b4bd8', .12);
+      UI.panel(ctx, L.px, L.py, L.pw, L.ph, { border: 'rgba(120,100,150,0.6)', accent: 'rgba(200,160,240,0.5)' });
+      Gfx.text('EQUIPO E INVENTARIO', Gfx.W / 2, L.py + 10, { size: 2, align: 'center', color: '#c8a0ff', outline: '#0b0910' });
+      const dmgP = Math.round(((h.gearDmgMul || 1) - 1) * 100);
+      const defP = Math.round((h.gearDef || 0) * 100);
+      const critP = Math.round((h.gearCrit || 0) * 100);
+      Gfx.text('ARMA +' + dmgP + '% · DEF ' + defP + '% · CRIT +' + critP + '% · VIDA +' + (h._gearHp || 0), Gfx.W / 2, L.py + 24, { size: 1, align: 'center', color: '#bdb0c8' });
+
+      const rows = g.invRows();
+      rows.forEach((r, i) => {
+        const it = r.kind === 'slot' ? h.gear[r.slot] : h.bag[r.idx];
+        const sel = g.invSel === i;
+        const y = L.py + L.row0 + i * L.rh;
+        if (sel) {
+          ctx.fillStyle = 'rgba(200,160,240,0.16)';
+          ctx.fillRect(L.px + 8, y - 9, L.pw - 16, 12);
+          Gfx.rect(L.px + 8, y - 9, 2, 12, '#c8a0ff');
+        }
+        const label = r.kind === 'slot' ? (r.slot === 'weapon' ? 'ARMA' : 'ARMADURA') : '';
+        if (label) Gfx.text(label, L.px + 14, y, { size: 1, color: '#8a7fa0' });
+        const name = it ? it.name : (r.kind === 'slot' ? '(vacía)' : '');
+        Gfx.text(name + (it ? '  ' + Items.statText(it) : ''), L.px + 14 + (label ? 64 : 0), y, { size: 1, color: it ? it.color : '#5a5468', shadow: '#000' });
+      });
+      Gfx.text('ENTER EQUIPAR/QUITAR · X DESCARTAR · I/ESC CERRAR', Gfx.W / 2, L.py + L.ph - 10, { size: 1, align: 'center', color: '#7a6f92' });
     },
 
     drawRadial(ctx, g) {

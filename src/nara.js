@@ -132,8 +132,21 @@
   const attackSheet = new Image();
   walkSheet.src = 'assets/nara/Nara-iso_walk_down-v1.png';
   attackSheet.src = 'assets/nara/Nara-iso_attack_down-v1.png';
+  // Vistas de espaldas ("up"): se muestran cuando el apuntado sube más allá
+  // del cono vertical, de modo que Nara mire arriba y abajo, no solo a los lados.
+  const walkUpSheet = new Image();
+  const attackUpSheet = new Image();
+  walkUpSheet.src = 'assets/nara/Nara-iso_walk_up-v1.png';
+  attackUpSheet.src = 'assets/nara/Nara-iso_attack_up-v1.png';
 
   function hasSheet(image) { return image.complete && image.naturalWidth >= 1280; }
+
+  // Mirando hacia arriba: componente vertical del apuntado por debajo de -0.55
+  // (~ -33°). Por encima de +0.55 y en los lados se sigue usando la hoja frontal.
+  function lookUp(hero) { return Math.sin(hero.aim || 0) < -0.55; }
+  function pickSheet(down, up, hero) {
+    return lookUp(hero) && hasSheet(up) ? up : down;
+  }
 
   function drawSheetFrame(ctx, image, frame, hero, alpha) {
     const column = frame % 5, row = Math.floor(frame / 5);
@@ -149,7 +162,9 @@
 
   function drawImported(ctx, hero, time, alpha) {
     const moving = Math.hypot(hero.vx || 0, hero.vy || 0) > 14;
-    if (hero.state === 'attack' && hasSheet(attackSheet)) {
+    const aSheet = pickSheet(attackSheet, attackUpSheet, hero);
+    const wSheet = pickSheet(walkSheet, walkUpSheet, hero);
+    if (hero.state === 'attack' && hasSheet(aSheet)) {
       const windows = [
         { w: .055, a: .11, r: .13, frames: [7, 8, 9, 10, 11, 12] },
         { w: .05, a: .10, r: .15, frames: [12, 13, 14, 15, 16, 17, 18] },
@@ -158,24 +173,24 @@
       const attack = windows[hero.attackIndex || 0];
       const progress = E.clamp01(hero.t / (attack.w + attack.a + attack.r));
       const frame = attack.frames[Math.min(attack.frames.length - 1, Math.floor(progress * attack.frames.length))];
-      drawSheetFrame(ctx, attackSheet, frame, hero, alpha);
+      drawSheetFrame(ctx, aSheet, frame, hero, alpha);
       return true;
     }
-    if ((hero.state === 'heavy' || hero.state === 'cast') && hasSheet(attackSheet)) {
+    if ((hero.state === 'heavy' || hero.state === 'cast') && hasSheet(aSheet)) {
       const frame = hero.state === 'heavy'
         ? (hero.t < .2 ? 8 : hero.t < .36 ? 11 : 19)
         : 0;
-      drawSheetFrame(ctx, attackSheet, frame, hero, alpha);
+      drawSheetFrame(ctx, aSheet, frame, hero, alpha);
       return true;
     }
-    if (moving && hasSheet(walkSheet)) {
+    if (moving && hasSheet(wSheet)) {
       // AutoSprite's 25-frame export repeats the same five-step walk cycle.
       const frame = Math.floor((time || hero.animT || 0) * 11) % 5;
-      drawSheetFrame(ctx, walkSheet, frame, hero, alpha);
+      drawSheetFrame(ctx, wSheet, frame, hero, alpha);
       return true;
     }
-    if (hasSheet(attackSheet)) {
-      drawSheetFrame(ctx, attackSheet, 0, hero, alpha);
+    if (hasSheet(aSheet)) {
+      drawSheetFrame(ctx, aSheet, 0, hero, alpha);
       return true;
     }
     return false;

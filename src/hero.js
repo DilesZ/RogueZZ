@@ -247,8 +247,11 @@
         return;
       }
 
-      // apuntado
-      this.aim = Input.aimFrom(this.x, this.y - 14, this.aim);
+      // apuntado: ratón si está en la ventana; si no, caminar mantiene la
+      // mirada en la dirección de movimiento (teclado / stick izquierdo).
+      const mvAim = Input.axis();
+      const fbAim = (mvAim.x || mvAim.y) ? Math.atan2(mvAim.y, mvAim.x) : this.aim;
+      this.aim = Input.aimFrom(this.x, this.y - 14, fbAim);
       const dx = Math.cos(this.aim);
       if (Math.abs(dx) > 0.16) this.face = dx > 0 ? 1 : -1;
 

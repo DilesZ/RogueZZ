@@ -49,14 +49,23 @@
         const r = canvas.getBoundingClientRect();
         this.mouse.cx = e.clientX - r.left;
         this.mouse.cy = e.clientY - r.top;
-        const sx = canvas.width / Math.max(1, r.width);
-        const sy = canvas.height / Math.max(1, r.height);
-        this.mouse.x = this.mouse.cx * sx;
-        this.mouse.y = this.mouse.cy * sy;
+        // Coordenadas lógicas del juego (480×270): apuntado, menú radial y
+        // menús comparan contra este espacio. Antes se convertía al espacio
+        // ráster del canvas (960×540) y el cursor quedaba al doble de
+        // distancia de donde el juego creía, desviando la puntería.
+        const gw = (window.Gfx && Gfx.W) || 480;
+        const gh = (window.Gfx && Gfx.H) || 270;
+        this.mouse.x = this.mouse.cx / Math.max(1, r.width) * gw;
+        this.mouse.y = this.mouse.cy / Math.max(1, r.height) * gh;
         this.mouse.moved = 0;
         this.mouse.inside = true;
       };
       window.addEventListener('mousemove', setMouse);
+      // El puntero salió de la ventana: el apuntado pasa al respaldo
+      // (movimiento/última mira) hasta que vuelva a entrar.
+      document.documentElement.addEventListener('mouseleave', () => {
+        this.mouse.inside = false;
+      });
       window.addEventListener('mousedown', (e) => {
         setMouse(e);
         if (e.button === 0) {
@@ -97,7 +106,7 @@
       this.mouse.pressed = false;
       this.mouse.released = false;
       this.mouse.pressed2 = false;
-      if (this.mouse.moved > 1.2) this.mouse.inside = false;
+      // La mira sigue al ratón aunque esté quieto: no caduca por tiempo.
     },
 
     pollPad() {
@@ -160,11 +169,11 @@
       if (this.gp.connected && (Math.abs(this.gp.aimx) + Math.abs(this.gp.aimy)) > 0.3) {
         return Math.atan2(this.gp.aimy, this.gp.aimx);
       }
-      // El ratón vive en coordenadas de pantalla: hay que pasar el punto de
-      // referencia (héroe) a pantalla antes de comparar, o toda la franja
-      // entre su posición de mundo y su posición en pantalla apunta al lado
-      // contrario cuando la cámara tiene offset.
-      if (this.mouse.inside && this.mouse.moved < 3) return E.angTo(Gfx.screenX(px), Gfx.screenY(py), this.mouse.x, this.mouse.y);
+      // El ratón vive en coordenadas de pantalla lógicas y el héroe en
+      // coordenadas de mundo: hay que pasar el punto de referencia a pantalla
+      // antes de comparar (screenX/screenY ya incluyen zoom, shake y offset
+      // de cámara). Válido aunque el ratón esté quieto: la mira no caduca.
+      if (this.mouse.inside) return E.angTo(Gfx.screenX(px), Gfx.screenY(py), this.mouse.x, this.mouse.y);
       return fallback;
     },
 
